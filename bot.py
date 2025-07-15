@@ -1,7 +1,6 @@
 import os
 import telebot
-from flask import Flask
-from threading import Thread
+from flask import Flask, request, abort
 
 # Token de BotFather desde variable de entorno
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -42,22 +41,16 @@ aportes_f2 = {
     "Guille": 0.001675975,
 }
 
-# Total BTC para calcular participación
 total_btc_f2 = sum(aportes_f2.values())
 
-# Nombres para reparto Kush (dividendo especial)
 kush_names = {"javi", "pata", "rafa"}
-kush_fixed_div = DIVIDENDO_30 / len(kush_names)  # Reparto igual para ellos tres
+kush_fixed_div = DIVIDENDO_30 / len(kush_names)
 
-# Construimos lista inversores_f2 con participaciones y dividendos
 inversores_f2 = []
 for nombre, btc in aportes_f2.items():
     participacion = (btc / total_btc_f2) * 100
     div_normal = (participacion / 100) * DIVIDENDO_70
-    if nombre.lower() in kush_names:
-        div_kush = kush_fixed_div
-    else:
-        div_kush = 0.0
+    div_kush = kush_fixed_div if nombre.lower() in kush_names else 0.0
     total_div = div_normal + div_kush
     inversores_f2.append({
         "nombre": nombre,
@@ -66,8 +59,6 @@ for nombre, btc in aportes_f2.items():
         "div_kush": round(div_kush, 2),
         "total": round(total_div, 2)
     })
-
-# ------------------- Comandos de tablas -------------------
 
 @bot.message_handler(commands=['tabla1'])
 def enviar_tabla1(message):
@@ -91,8 +82,6 @@ def enviar_tabla2(message):
     tabla += "----------------------------------------------------------\n"
     tabla += f"{'TOTAL':<10} {100.00:>6.2f}%     ${DIVIDENDO_70:>10,.2f}   ${DIVIDENDO_30:>9,.2f}   ${FONDO2_TOTAL:>10,.2f}"
     bot.send_message(message.chat.id, f"\n{tabla}", parse_mode='Markdown')
-
-# ------------------- Consulta individual -------------------
 
 @bot.message_handler(func=lambda message: True)
 def responder(message):
@@ -130,25 +119,29 @@ def responder(message):
     else:
         bot.reply_to(message, "❌ No se encontró ningún inversor con ese nombre.")
 
-# ------------------- Servidor Flask para mantener vivo el bot -------------------
+# ------------------- Flask app y webhook -------------------
 
-app = Flask('')
+app = Flask(__name__)
 
 @app.route('/')
 def home():
     return "Bot activo!"
 
-def run():
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return '', 200
+    else:
+        abort(403)
+
+if __name__ == '__main__':
+    # No usar infinity_polling() con webhook!
+    # Solo arrancar flask
+    print("🤖 Bot iniciado con webhook...")
     app.run(host='0.0.0.0', port=8080)
 
-def keep_alive():
-    t = Thread(target=run)
-    t.start()
-
-# ------------------- Iniciar Bot -------------------
-
-keep_alive()
-print("🤖 Bot iniciado...")
-bot.infinity_polling()
 
 
