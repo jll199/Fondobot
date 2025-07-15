@@ -1,9 +1,10 @@
+import os
 import telebot
 from flask import Flask
 from threading import Thread
 
-# Token de BotFather
-TOKEN = "7162561523:AAEQ7_p1HpIotC3uA0JlN1e8wC65HIE24po"
+# Token de BotFather desde variable de entorno
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
 # ------------------- Fondo 1: Fondo de Recuperación -------------------
@@ -20,8 +21,8 @@ inversores_f1 = [
 
 # ------------------- Fondo 2: Pestillo Capital -------------------
 FONDO2_TOTAL = 80000.0
-DIVIDENDO_70 = 56000.0
-DIVIDENDO_30 = 24000.0
+DIVIDENDO_70 = 56000.0  # 70% para reparto proporcional
+DIVIDENDO_30 = 24000.0  # 30% para reparto Kush
 
 # Aportaciones originales (BTC)
 aportes_f2 = {
@@ -41,14 +42,14 @@ aportes_f2 = {
     "Guille": 0.001675975,
 }
 
-# Total BTC
+# Total BTC para calcular participación
 total_btc_f2 = sum(aportes_f2.values())
 
-# Participación general y reparto fijo de KUSH
+# Nombres para reparto Kush (dividendo especial)
 kush_names = {"javi", "pata", "rafa"}
-kush_fixed_div = DIVIDENDO_30 / len(kush_names)
+kush_fixed_div = DIVIDENDO_30 / len(kush_names)  # Reparto igual para ellos tres
 
-# Construimos inversores_f2 con dividendos correctos
+# Construimos lista inversores_f2 con participaciones y dividendos
 inversores_f2 = []
 for nombre, btc in aportes_f2.items():
     participacion = (btc / total_btc_f2) * 100
@@ -149,4 +150,5 @@ def keep_alive():
 keep_alive()
 print("🤖 Bot iniciado...")
 bot.infinity_polling()
+
 
