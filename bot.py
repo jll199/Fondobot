@@ -2,9 +2,6 @@ import os
 import telebot
 from flask import Flask
 from threading import Thread
-from datetime import datetime
-import matplotlib.pyplot as plt
-import pandas as pd
 
 # Token de BotFather desde variable de entorno
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -70,59 +67,11 @@ for nombre, btc in aportes_f2.items():
         "total": round(total_div, 2)
     })
 
-# ------------------- Histórico Fondo 2 -------------------
-HISTORICO_FILE = "historico_fondo2.csv"
-INVERSION_INICIAL = 6000.0
-FECHA_REFERENCIA = datetime(2021, 1, 1)
-
-def cargar_historico():
-    if not os.path.isfile(HISTORICO_FILE):
-        # Crear archivo con valor inicial si no existe
-        df = pd.DataFrame({
-            "fecha": [FECHA_REFERENCIA.strftime("%Y-%m-%d")],
-            "valor": [INVERSION_INICIAL]
-        })
-        df.to_csv(HISTORICO_FILE, index=False)
-        return df
-    else:
-        return pd.read_csv(HISTORICO_FILE, parse_dates=["fecha"])
-
-def agregar_valor_actual(valor):
-    df = cargar_historico()
-    hoy = datetime.now().strftime("%Y-%m-%d")
-    if hoy in df['fecha'].dt.strftime("%Y-%m-%d").values:
-        return False  # Ya existe valor para hoy
-    nuevo = pd.DataFrame({"fecha": [hoy], "valor": [valor]})
-    df = pd.concat([df, nuevo], ignore_index=True)
-    df.to_csv(HISTORICO_FILE, index=False)
-    return True
-
-def generar_grafico():
-    df = cargar_historico()
-    df = df.sort_values("fecha")
-    df["pnl"] = df["valor"] - INVERSION_INICIAL  # Ganancia o pérdida respecto a inversión inicial
-
-    plt.figure(figsize=(10,5))
-    plt.axhline(0, color='gray', linestyle='--')
-    plt.plot(df["fecha"], df["pnl"], marker='o', color='green')
-    plt.fill_between(df["fecha"], df["pnl"], 0, where=(df["pnl"] >= 0), facecolor='green', alpha=0.3)
-    plt.fill_between(df["fecha"], df["pnl"], 0, where=(df["pnl"] < 0), facecolor='red', alpha=0.3)
-    plt.title("P&L Histórico - Pestillo Capital")
-    plt.xlabel("Fecha")
-    plt.ylabel("Ganancia/Pérdida (USD)")
-    plt.grid(True)
-    plt.tight_layout()
-
-    img_path = "grafico_fondo2.png"
-    plt.savefig(img_path)
-    plt.close()
-    return img_path
-
 # ------------------- Comandos de tablas -------------------
 
 @bot.message_handler(commands=['tabla1'])
 def enviar_tabla1(message):
-    tabla = "📋 *Fondo de Recuperación*\n\n"
+    tabla = "📋 Fondo de Recuperación\n\n"
     tabla += "Código   Nombre      %       Monto USD\n"
     tabla += "----------------------------------------\n"
     for inv in sorted(inversores_f1, key=lambda x: x['porcentaje'], reverse=True):
@@ -130,43 +79,18 @@ def enviar_tabla1(message):
         tabla += f"{inv['codigo']:<8} {inv['nombre']:<10} {inv['porcentaje']:>6.2f}%  ${monto:>10,.2f}\n"
     tabla += "----------------------------------------\n"
     tabla += f"{'Total':<20} {100.00:>6.2f}%  ${FONDO1_TOTAL:>10,.2f}\n"
-    bot.send_message(message.chat.id, f"```\n{tabla}```", parse_mode='Markdown')
+    bot.send_message(message.chat.id, f"\n{tabla}", parse_mode='Markdown')
 
 @bot.message_handler(commands=['tabla2'])
 def enviar_tabla2(message):
-    tabla = "📋 *Pestillo Capital*\n\n"
+    tabla = "📋 Pestillo Capital\n\n"
     tabla += "Nombre     %        Dividendo $    Div. Kush $   Total $\n"
     tabla += "----------------------------------------------------------\n"
     for inv in sorted(inversores_f2, key=lambda x: x['participacion'], reverse=True):
         tabla += f"{inv['nombre']:<10} {inv['participacion']:>6.2f}%     ${inv['div_normal']:>10,.2f}   ${inv['div_kush']:>9,.2f}   ${inv['total']:>10,.2f}\n"
     tabla += "----------------------------------------------------------\n"
     tabla += f"{'TOTAL':<10} {100.00:>6.2f}%     ${DIVIDENDO_70:>10,.2f}   ${DIVIDENDO_30:>9,.2f}   ${FONDO2_TOTAL:>10,.2f}"
-    bot.send_message(message.chat.id, f"```\n{tabla}```", parse_mode='Markdown')
-
-# ------------------- Nuevo comando: graficofondo2 -------------------
-
-@bot.message_handler(commands=['graficofondo2'])
-def enviar_grafico(message):
-    img_path = generar_grafico()
-    with open(img_path, 'rb') as photo:
-        bot.send_photo(message.chat.id, photo, caption="📈 P&L Histórico de Pestillo Capital desde 01-01-2021")
-
-# ------------------- Nuevo comando: actualizarvalor -------------------
-
-@bot.message_handler(commands=['actualizarvalor'])
-def actualizar_valor(message):
-    try:
-        partes = message.text.split()
-        if len(partes) != 2:
-            raise ValueError("Formato incorrecto")
-        valor = float(partes[1])
-        exito = agregar_valor_actual(valor)
-        if exito:
-            bot.reply_to(message, f"✅ Valor ${valor:.2f} registrado para hoy.")
-        else:
-            bot.reply_to(message, "⚠️ Ya hay un valor registrado para hoy.")
-    except Exception as e:
-        bot.reply_to(message, "❌ Uso correcto: /actualizarvalor <valor> (ejemplo: /actualizarvalor 75000)")
+    bot.send_message(message.chat.id, f"\n{tabla}", parse_mode='Markdown')
 
 # ------------------- Consulta individual -------------------
 
@@ -176,5 +100,55 @@ def responder(message):
     total_general = 0.0
     respuesta = ""
 
+    inv1 = next((inv for inv in inversores_f1 if inv['nombre'].lower() == nombre_input), None)
+    if inv1:
+        porcentaje1 = inv1["porcentaje"]
+        monto1 = round((porcentaje1 / 100) * FONDO1_TOTAL, 2)
+        total_general += monto1
+        respuesta += (
+            f"📌 Fondo de Recuperación\n"
+            f"👤 Nombre: {inv1['nombre']}\n"
+            f"📊 Participación: {porcentaje1:.2f}%\n"
+            f"💰 Monto: ${monto1:,.2f} USD\n\n"
+        )
+
+    inv2 = next((inv for inv in inversores_f2 if inv['nombre'].lower() == nombre_input), None)
+    if inv2:
+        total_general += inv2["total"]
+        respuesta += (
+            f"📌 Pestillo Capital\n"
+            f"👤 Nombre: {inv2['nombre']}\n"
+            f"📊 Participación: {inv2['participacion']:.2f}%\n"
+            f"💵 Dividendo: ${inv2['div_normal']:,.2f}\n"
+            f"🍃 Dividendo KUSH: ${inv2['div_kush']:,.2f}\n"
+            f"💰 Total Fondo 2: ${inv2['total']:,.2f} USD\n\n"
+        )
+
+    if respuesta:
+        respuesta += f"📦 Total combinado: ${total_general:,.2f} USD"
+        bot.reply_to(message, respuesta.strip(), parse_mode='Markdown')
+    else:
+        bot.reply_to(message, "❌ No se encontró ningún inversor con ese nombre.")
+
+# ------------------- Servidor Flask para mantener vivo el bot -------------------
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "Bot activo!"
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# ------------------- Iniciar Bot -------------------
+
+keep_alive()
+print("🤖 Bot iniciado...")
+bot.infinity_polling()
 
 

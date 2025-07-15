@@ -1,5 +1,2 @@
 pyTelegramBotAPI
 flask
-matplotlib
-pandas
-gunicorn
