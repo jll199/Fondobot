@@ -1,14 +1,15 @@
 import os
 import telebot
-from flask import Flask, request, abort
+from flask import Flask, request
+from threading import Thread
 
-# Token de BotFather desde variable de entorno o pon tu token aquí directamente
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or "7162561523:AAEQ7_p1HpIotC3uA0JlN1e8wC65HIE24po"
+# Token de BotFather desde variable de entorno
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-# ------------------- Datos de Fondos -------------------
-
+# ------------------- Fondo 1: Fondo de Recuperación -------------------
 FONDO1_TOTAL = 15100.0
+
 inversores_f1 = [
     {"codigo": "123456", "nombre": "Varela", "porcentaje": 30.47},
     {"codigo": "654321", "nombre": "Ander",  "porcentaje": 45.30},
@@ -18,10 +19,12 @@ inversores_f1 = [
     {"codigo": "567890", "nombre": "James",  "porcentaje": 5.19},
 ]
 
+# ------------------- Fondo 2: Pestillo Capital -------------------
 FONDO2_TOTAL = 80000.0
-DIVIDENDO_70 = 56000.0
-DIVIDENDO_30 = 24000.0
+DIVIDENDO_70 = 56000.0  # 70% para reparto proporcional
+DIVIDENDO_30 = 24000.0  # 30% para reparto Kush
 
+# Aportaciones originales (BTC)
 aportes_f2 = {
     "Javi": 0.033185225,
     "Pata": 0.030886156,
@@ -39,15 +42,22 @@ aportes_f2 = {
     "Guille": 0.001675975,
 }
 
+# Total BTC para calcular participación
 total_btc_f2 = sum(aportes_f2.values())
-kush_names = {"javi", "pata", "rafa"}
-kush_fixed_div = DIVIDENDO_30 / len(kush_names)
 
+# Nombres para reparto Kush (dividendo especial)
+kush_names = {"javi", "pata", "rafa"}
+kush_fixed_div = DIVIDENDO_30 / len(kush_names)  # Reparto igual para ellos tres
+
+# Construimos lista inversores_f2 con participaciones y dividendos
 inversores_f2 = []
 for nombre, btc in aportes_f2.items():
     participacion = (btc / total_btc_f2) * 100
     div_normal = (participacion / 100) * DIVIDENDO_70
-    div_kush = kush_fixed_div if nombre.lower() in kush_names else 0.0
+    if nombre.lower() in kush_names:
+        div_kush = kush_fixed_div
+    else:
+        div_kush = 0.0
     total_div = div_normal + div_kush
     inversores_f2.append({
         "nombre": nombre,
@@ -57,30 +67,30 @@ for nombre, btc in aportes_f2.items():
         "total": round(total_div, 2)
     })
 
-# ------------------- Comandos -------------------
+# ------------------- Comandos de tablas -------------------
 
 @bot.message_handler(commands=['tabla1'])
 def enviar_tabla1(message):
     tabla = "📋 Fondo de Recuperación\n\n"
-    tabla += "Código  Nombre    %       Monto USD\n"
-    tabla += "-------------------------------------\n"
+    tabla += f"{'Código':<8} {'Nombre':<10} {'%':>7} {'Monto USD':>12}\n"
+    tabla += "-" * 40 + "\n"
     for inv in sorted(inversores_f1, key=lambda x: x['porcentaje'], reverse=True):
         monto = round((inv["porcentaje"] / 100) * FONDO1_TOTAL, 2)
-        tabla += f"{inv['codigo']:<7} {inv['nombre']:<8} {inv['porcentaje']:>6.2f}%  ${monto:>10,.2f}\n"
-    tabla += "-------------------------------------\n"
-    tabla += f"{'Total':<16} {100.00:>6.2f}%  ${FONDO1_TOTAL:>10,.2f}\n"
-    bot.send_message(message.chat.id, f"```\n{tabla}```", parse_mode='MarkdownV2')
+        tabla += f"{inv['codigo']:<8} {inv['nombre']:<10} {inv['porcentaje']:>7.2f}%  ${monto:>11,.2f}\n"
+    tabla += "-" * 40 + "\n"
+    tabla += f"{'Total':<20} {100.00:>7.2f}%  ${FONDO1_TOTAL:>11,.2f}\n"
+    bot.send_message(message.chat.id, f"```\n{tabla}```", parse_mode='Markdown')
 
 @bot.message_handler(commands=['tabla2'])
 def enviar_tabla2(message):
     tabla = "📋 Pestillo Capital\n\n"
-    tabla += "Nombre     %        Dividendo $   Div. Kush $   Total $\n"
-    tabla += "---------------------------------------------------------\n"
+    tabla += f"{'Nombre':<10} {'%':>7} {'Dividendo $':>14} {'Div. Kush $':>13} {'Total $':>12}\n"
+    tabla += "-" * 60 + "\n"
     for inv in sorted(inversores_f2, key=lambda x: x['participacion'], reverse=True):
-        tabla += f"{inv['nombre']:<10} {inv['participacion']:>6.2f}%    ${inv['div_normal']:>10,.2f}  ${inv['div_kush']:>10,.2f}  ${inv['total']:>10,.2f}\n"
-    tabla += "---------------------------------------------------------\n"
-    tabla += f"{'TOTAL':<10} {100.00:>6.2f}%    ${DIVIDENDO_70:>10,.2f}  ${DIVIDENDO_30:>10,.2f}  ${FONDO2_TOTAL:>10,.2f}"
-    bot.send_message(message.chat.id, f"```\n{tabla}```", parse_mode='MarkdownV2')
+        tabla += f"{inv['nombre']:<10} {inv['participacion']:>7.2f}%   ${inv['div_normal']:>12,.2f}   ${inv['div_kush']:>11,.2f}   ${inv['total']:>10,.2f}\n"
+    tabla += "-" * 60 + "\n"
+    tabla += f"{'TOTAL':<10} {100.00:>7.2f}%   ${DIVIDENDO_70:>12,.2f}   ${DIVIDENDO_30:>11,.2f}   ${FONDO2_TOTAL:>10,.2f}"
+    bot.send_message(message.chat.id, f"```\n{tabla}```", parse_mode='Markdown')
 
 # ------------------- Consulta individual -------------------
 
@@ -120,9 +130,9 @@ def responder(message):
     else:
         bot.reply_to(message, "❌ No se encontró ningún inversor con ese nombre.")
 
-# ------------------- Flask webhook server -------------------
+# ------------------- Servidor Flask para Webhook -------------------
 
-app = Flask(__name__)
+app = Flask('')
 
 @app.route('/')
 def home():
@@ -130,16 +140,15 @@ def home():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return '', 200
-    else:
-        abort(403)
+    json_str = request.get_data().decode('utf-8')
+    update = telebot.types.Update.de_json(json_str)
+    bot.process_new_updates([update])
+    return '', 200
 
-if __name__ == '__main__':
-    # Puerto para Render o Replit (puede cambiar según entorno)
-    port = int(os.environ.get('PORT', 8080))
-    app.run(host='0.0.0.0', port=port)
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+if __name__ == "__main__":
+    run()
+
 
