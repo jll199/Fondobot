@@ -1,15 +1,20 @@
-import os 
-import telebot
+import os
+import time
+import requests
+from decimal import Decimal
 from flask import Flask, request
 from threading import Thread
+import telebot
 
-# Token de BotFather desde variable de entorno
+# ------------------- Configuración -------------------
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-# ------------------- Fondo 1: Fondo de Recuperación -------------------
-FONDO1_TOTAL = 15100.0
+LDO_CONTRACT = "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32"
+WALLET_ADDRESS = "0x048a4ffCE31D6bBFEa6b33eECfc91A5BE0053Dd3"
+ETHERSCAN_API_KEY = "PZ3CPGHG7YBWHZC2P82GXKNJ23TK7JQEBW"
 
+# ------------------- Fondo 1: Fondo de Recuperación -------------------
 inversores_f1 = [
     {"codigo": "123456", "nombre": "Varela", "porcentaje": 30.47},
     {"codigo": "654321", "nombre": "Ander",  "porcentaje": 45.30},
@@ -19,12 +24,48 @@ inversores_f1 = [
     {"codigo": "567890", "nombre": "James",  "porcentaje": 5.19},
 ]
 
+# ------------------- Sistema de Caché para el Fondo 1 -------------------
+_last_update_time = 0
+_cached_fondo1_total = 0.0
+CACHE_TIMEOUT = 60  # segundos
+
+def obtener_saldo_ldo():
+    url = (
+        f"https://api.etherscan.io/api"
+        f"?module=account"
+        f"&action=tokenbalance"
+        f"&contractaddress={LDO_CONTRACT}"
+        f"&address={WALLET_ADDRESS}"
+        f"&tag=latest"
+        f"&apikey={ETHERSCAN_API_KEY}"
+    )
+    try:
+        response = requests.get(url).json()
+        if response["status"] == "1":
+            saldo = Decimal(response["result"]) / Decimal(10**18)
+            return float(saldo)
+        else:
+            print("Error de Etherscan:", response["message"])
+            return None
+    except Exception as e:
+        print("Error al obtener saldo LDO:", e)
+        return None
+
+def get_fondo1_total():
+    global _last_update_time, _cached_fondo1_total
+    now = time.time()
+    if now - _last_update_time > CACHE_TIMEOUT:
+        nuevo_saldo = obtener_saldo_ldo()
+        if nuevo_saldo is not None:
+            _cached_fondo1_total = nuevo_saldo
+            _last_update_time = now
+    return _cached_fondo1_total
+
 # ------------------- Fondo 2: Pestillo Capital -------------------
 FONDO2_TOTAL = 80000.0
-DIVIDENDO_70 = 56000.0  # 70% para reparto proporcional
-DIVIDENDO_30 = 24000.0  # 30% para reparto Kush
+DIVIDENDO_70 = 56000.0
+DIVIDENDO_30 = 24000.0
 
-# Aportaciones originales (BTC)
 aportes_f2 = {
     "Javi": 0.033185225,
     "Pata": 0.030886156,
@@ -42,22 +83,15 @@ aportes_f2 = {
     "Guille": 0.001675975,
 }
 
-# Total BTC para calcular participación
 total_btc_f2 = sum(aportes_f2.values())
-
-# Nombres para reparto Kush (dividendo especial)
 kush_names = {"javi", "pata", "rafa"}
-kush_fixed_div = DIVIDENDO_30 / len(kush_names)  # Reparto igual para ellos tres
+kush_fixed_div = DIVIDENDO_30 / len(kush_names)
 
-# Construimos lista inversores_f2 con participaciones y dividendos
 inversores_f2 = []
 for nombre, btc in aportes_f2.items():
     participacion = (btc / total_btc_f2) * 100
     div_normal = (participacion / 100) * DIVIDENDO_70
-    if nombre.lower() in kush_names:
-        div_kush = kush_fixed_div
-    else:
-        div_kush = 0.0
+    div_kush = kush_fixed_div if nombre.lower() in kush_names else 0.0
     total_div = div_normal + div_kush
     inversores_f2.append({
         "nombre": nombre,
@@ -71,14 +105,15 @@ for nombre, btc in aportes_f2.items():
 
 @bot.message_handler(commands=['tabla1'])
 def enviar_tabla1(message):
+    fondo1_total = get_fondo1_total()
     tabla = "📋 Fondo de Recuperación\n\n"
     tabla += f"{'Código':<8} {'Nombre':<10} {'%':>7} {'Monto USD':>12}\n"
     tabla += "-" * 40 + "\n"
     for inv in sorted(inversores_f1, key=lambda x: x['porcentaje'], reverse=True):
-        monto = round((inv["porcentaje"] / 100) * FONDO1_TOTAL, 2)
+        monto = round((inv["porcentaje"] / 100) * fondo1_total, 2)
         tabla += f"{inv['codigo']:<8} {inv['nombre']:<10} {inv['porcentaje']:>7.2f}%  ${monto:>11,.2f}\n"
     tabla += "-" * 40 + "\n"
-    tabla += f"{'Total':<20} {100.00:>7.2f}%  ${FONDO1_TOTAL:>11,.2f}\n"
+    tabla += f"{'Total':<20} {100.00:>7.2f}%  ${fondo1_total:>11,.2f}\n"
     bot.send_message(message.chat.id, f"```\n{tabla}```", parse_mode='Markdown')
 
 @bot.message_handler(commands=['tabla2'])
@@ -102,8 +137,9 @@ def responder(message):
 
     inv1 = next((inv for inv in inversores_f1 if inv['nombre'].lower() == nombre_input), None)
     if inv1:
+        fondo1_total = get_fondo1_total()
         porcentaje1 = inv1["porcentaje"]
-        monto1 = round((porcentaje1 / 100) * FONDO1_TOTAL, 2)
+        monto1 = round((porcentaje1 / 100) * fondo1_total, 2)
         total_general += monto1
         respuesta += (
             f"📌 Fondo de Recuperación\n"
@@ -149,7 +185,7 @@ Cualquier duda, no dudes en ponerte en contacto con la administración.
 ¡Gracias por tu confianza y participación!"""
         bot.reply_to(message, mensaje_bienvenida, parse_mode='Markdown')
 
-# ------------------- Servidor Flask para Webhook -------------------
+# ------------------- Servidor Flask -------------------
 
 app = Flask('')
 
@@ -169,5 +205,6 @@ def run():
 
 if __name__ == "__main__":
     run()
+
 
 
