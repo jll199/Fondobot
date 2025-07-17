@@ -1,4 +1,4 @@
-import os
+import os 
 import telebot
 from flask import Flask, request
 from threading import Thread
@@ -128,7 +128,26 @@ def responder(message):
         respuesta += f"📦 Total combinado: ${total_general:,.2f} USD"
         bot.reply_to(message, respuesta.strip(), parse_mode='Markdown')
     else:
-        bot.reply_to(message, "❌ No se encontró ningún inversor con ese nombre.")
+        mensaje_bienvenida = """👋 *¡Bienvenido al canal de participación de fondos!*
+
+Estimado inversor,  
+Gracias por formar parte de este espacio privado donde podrás consultar tu participación actualizada en *dos fondos de inversión* gestionados de forma independiente:
+
+1. *Fondo de Recuperación*  
+2. *Pestillo Capital*
+
+📊 Aquí podrás consultar:
+- Tu *participación total* (sumando ambos fondos).
+- La *distribución exacta* de tus participaciones en cada fondo.
+
+🔎 Escribe en el chat:
+- ✅ Tu *nombre completo* para ver tu participación total.
+- 📄 `/tabla1` para ver la tabla del *Fondo de Recuperación*.
+- 📄 `/tabla2` para ver la tabla del *Fondo Pestillo Capital*.
+
+Cualquier duda, no dudes en ponerte en contacto con la administración.  
+¡Gracias por tu confianza y participación!"""
+        bot.reply_to(message, mensaje_bienvenida, parse_mode='Markdown')
 
 # ------------------- Servidor Flask para Webhook -------------------
 
