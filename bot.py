@@ -1,7 +1,6 @@
 import os
 import time
 import requests
-from decimal import Decimal
 from flask import Flask, request
 from threading import Thread
 import telebot
@@ -10,11 +9,12 @@ import telebot
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 bot = telebot.TeleBot(TOKEN)
 
-LDO_CONTRACT = "0x5A98FcBEA516Cf06857215779Fd812CA3beF1B32"
-WALLET_ADDRESS = "0x048a4ffCE31D6bBFEa6b33eECfc91A5BE0053Dd3"
-ETHERSCAN_API_KEY = "PZ3CPGHG7YBWHZC2P82GXKNJ23TK7JQEBW"
-
 # ------------------- Fondo 1: Fondo de Recuperación -------------------
+CANTIDAD_WIF = 14864.62  # Cantidad exacta de WIF en posesión del fondo
+CACHE_TIMEOUT = 60  # segundos
+_last_update_time = 0
+_cached_fondo1_total = 0.0
+
 inversores_f1 = [
     {"codigo": "123456", "nombre": "Varela", "porcentaje": 30.47},
     {"codigo": "654321", "nombre": "Ander",  "porcentaje": 45.30},
@@ -24,40 +24,23 @@ inversores_f1 = [
     {"codigo": "567890", "nombre": "James",  "porcentaje": 5.19},
 ]
 
-# ------------------- Sistema de Caché para el Fondo 1 -------------------
-_last_update_time = 0
-_cached_fondo1_total = 0.0
-CACHE_TIMEOUT = 60  # segundos
-
-def obtener_saldo_ldo():
-    url = (
-        f"https://api.etherscan.io/api"
-        f"?module=account"
-        f"&action=tokenbalance"
-        f"&contractaddress={LDO_CONTRACT}"
-        f"&address={WALLET_ADDRESS}"
-        f"&tag=latest"
-        f"&apikey={ETHERSCAN_API_KEY}"
-    )
+def obtener_precio_wif():
+    url = "https://api.coingecko.com/api/v3/simple/price?ids=dogwifhat&vs_currencies=usdt"
     try:
         response = requests.get(url).json()
-        if response["status"] == "1":
-            saldo = Decimal(response["result"]) / Decimal(10**18)
-            return float(saldo)
-        else:
-            print("Error de Etherscan:", response["message"])
-            return None
+        precio = response['dogwifhat']['usdt']
+        return float(precio)
     except Exception as e:
-        print("Error al obtener saldo LDO:", e)
+        print("❌ Error al obtener precio WIF:", e)
         return None
 
 def get_fondo1_total():
     global _last_update_time, _cached_fondo1_total
     now = time.time()
     if now - _last_update_time > CACHE_TIMEOUT:
-        nuevo_saldo = obtener_saldo_ldo()
-        if nuevo_saldo is not None:
-            _cached_fondo1_total = nuevo_saldo
+        precio_actual = obtener_precio_wif()
+        if precio_actual is not None:
+            _cached_fondo1_total = CANTIDAD_WIF * precio_actual
             _last_update_time = now
     return _cached_fondo1_total
 
@@ -129,6 +112,8 @@ def enviar_tabla2(message):
 
 # ------------------- Consulta individual -------------------
 
+usuarios_respondidos = set()
+
 @bot.message_handler(func=lambda message: True)
 def responder(message):
     nombre_input = message.text.strip().lower()
@@ -164,7 +149,10 @@ def responder(message):
         respuesta += f"📦 Total combinado: ${total_general:,.2f} USD"
         bot.reply_to(message, respuesta.strip(), parse_mode='Markdown')
     else:
-        mensaje_bienvenida = """👋 *¡Bienvenido al canal de participación de fondos!*
+        chat_id = message.chat.id
+        if chat_id not in usuarios_respondidos:
+            usuarios_respondidos.add(chat_id)
+            mensaje_bienvenida = """👋 *¡Bienvenido al canal de participación de fondos!*
 
 Estimado inversor,  
 Gracias por formar parte de este espacio privado donde podrás consultar tu participación actualizada en *dos fondos de inversión* gestionados de forma independiente:
@@ -183,7 +171,15 @@ Gracias por formar parte de este espacio privado donde podrás consultar tu part
 
 Cualquier duda, no dudes en ponerte en contacto con la administración.  
 ¡Gracias por tu confianza y participación!"""
-        bot.reply_to(message, mensaje_bienvenida, parse_mode='Markdown')
+            bot.reply_to(message, mensaje_bienvenida, parse_mode='Markdown')
+        else:
+            instrucciones = """ℹ️ *Instrucciones para consultar tu participación:*
+
+- Escribe tu *nombre exacto* tal como fue registrado.
+- O usa los comandos disponibles:
+  • `/tabla1` – Fondo de Recuperación  
+  • `/tabla2` – Fondo Pestillo Capital"""
+            bot.reply_to(message, instrucciones, parse_mode='Markdown')
 
 # ------------------- Servidor Flask -------------------
 
