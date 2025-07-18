@@ -25,10 +25,12 @@ inversores_f1 = [
 ]
 
 def obtener_precio_wif():
-    url = "https://api.coingecko.com/api/v3/simple/price?ids=dogwifhat&vs_currencies=usdt"
+    url = "https://api.coingecko.com/api/v3/simple/price?ids=dogwifcoin&vs_currencies=usd"
     try:
-        response = requests.get(url).json()
-        precio = response['dogwifhat']['usdt']
+        response = requests.get(url)
+        data = response.json()
+        print("🔎 Respuesta CoinGecko:", data)
+        precio = data['dogwifcoin']['usd']
         return float(precio)
     except Exception as e:
         print("❌ Error al obtener precio WIF:", e)
@@ -201,6 +203,7 @@ def run():
 
 if __name__ == "__main__":
     run()
+
 
 
 
