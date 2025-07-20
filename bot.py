@@ -6,7 +6,7 @@ import hashlib
 from flask import Flask, request
 from threading import Thread
 import telebot
-from dotenv import load_dotenv
+
 
 # ------------------- Cargar variables de entorno -------------------
 load_dotenv()
