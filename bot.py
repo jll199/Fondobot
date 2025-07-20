@@ -34,41 +34,39 @@ inversores_f1 = [
 def get_fondo1_total():
     global _last_update_time, _cached_fondo1_total
     now = time.time()
-    # Forzar siempre cálculo eliminando la caché temporalmente:
-    # if now - _last_update_time > CACHE_TIMEOUT:
-    path = '/api/v3/account'
-    timestamp = int(now * 1000)
-    query_string = f'timestamp={timestamp}'
-    signature = hmac.new(MEXC_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
-    headers = { 'X-MEXC-APIKEY': MEXC_API_KEY }
-    url = f'{BASE_URL}{path}?{query_string}&signature={signature}'
-    response = requests.get(url, headers=headers)
-    print("🔍 URL de la petición:", url)
-    print("📬 Respuesta de MEXC:", response.status_code)
-    if response.status_code == 200:
-        data = response.json()
-        print("📦 Datos de la cuenta:\n", data)
-        total = 0.0
-        for balance in data['balances']:
-            amount = float(balance['free']) + float(balance['locked'])
-            if amount > 0:
-                symbol = balance['asset'] + 'USDT'
-                try:
-                    price_url = f"https://api.mexc.com/api/v3/ticker/price?symbol={symbol}"
-                    price_response = requests.get(price_url)
-                    price = float(price_response.json()['price'])
-                    print(f"✅ {balance['asset']}: {amount} * ${price} = ${amount * price}")
-                    total += amount * price
-                except Exception as e:
-                    print(f"❌ Error con {symbol}: {e}")
-                    continue
-        print("💰 Total calculado:", total)
-        _cached_fondo1_total = total
-        _last_update_time = now
-    else:
-        print("❌ Error al conectar con MEXC:", response.text)
+    print("📡 Llamando a MEXC para obtener el total del Fondo 1")
+    if now - _last_update_time > CACHE_TIMEOUT:
+        path = '/api/v3/account'
+        timestamp = int(now * 1000)
+        query_string = f'timestamp={timestamp}'
+        signature = hmac.new(MEXC_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
+        headers = { 'X-MEXC-APIKEY': MEXC_API_KEY }
+        url = f'{BASE_URL}{path}?{query_string}&signature={signature}'
+        try:
+            response = requests.get(url, headers=headers)
+            print("🔧 Respuesta de MEXC:", response.status_code, response.text)
+            if response.status_code == 200:
+                data = response.json()
+                total = 0.0
+                for balance in data.get('balances', []):
+                    amount = float(balance['free']) + float(balance['locked'])
+                    if amount > 0:
+                        symbol = balance['asset'] + 'USDT'
+                        try:
+                            price_url = f"https://api.mexc.com/api/v3/ticker/price?symbol={symbol}"
+                            price_response = requests.get(price_url)
+                            price = float(price_response.json()['price'])
+                            total += amount * price
+                        except Exception as e:
+                            print(f"⚠ Error obteniendo precio de {symbol}:", e)
+                            continue
+                _cached_fondo1_total = total
+                _last_update_time = now
+            else:
+                print("❌ Error en respuesta MEXC")
+        except Exception as e:
+            print("❌ Error al conectar con MEXC:", e)
     return _cached_fondo1_total
-
 
 
 # ------------------- Fondo 2: Pestillo Capital -------------------
