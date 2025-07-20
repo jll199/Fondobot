@@ -43,20 +43,26 @@ def get_fondo1_total():
         headers = { 'X-MEXC-APIKEY': MEXC_API_KEY }
         url = f'{BASE_URL}{path}?{query_string}&signature={signature}'
         response = requests.get(url, headers=headers)
+
         if response.status_code == 200:
             data = response.json()
             total = 0.0
             for balance in data['balances']:
                 amount = float(balance['free']) + float(balance['locked'])
                 if amount > 0:
-                    symbol = balance['asset'] + 'USDT'
-                    try:
-                        price_url = f"https://api.mexc.com/api/v3/ticker/price?symbol={symbol}"
-                        price_response = requests.get(price_url)
-                        price = float(price_response.json()['price'])
-                        total += amount * price
-                    except:
-                        continue
+                    asset = balance['asset']
+                    if asset == 'USDT':
+                        total += amount  # No necesita conversión
+                    else:
+                        symbol = asset + 'USDT'
+                        try:
+                            price_url = f"https://api.mexc.com/api/v3/ticker/price?symbol={symbol}"
+                            price_response = requests.get(price_url)
+                            price_data = price_response.json()
+                            price = float(price_data['price'])
+                            total += amount * price
+                        except:
+                            continue
             _cached_fondo1_total = total
             _last_update_time = now
     return _cached_fondo1_total
