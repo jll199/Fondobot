@@ -6,10 +6,11 @@ import hashlib
 from flask import Flask, request
 from threading import Thread
 import telebot
-
+from dotenv import load_dotenv
+from datetime import datetime
 
 # ------------------- Cargar variables de entorno -------------------
-
+load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MEXC_API_KEY = os.getenv("MEXC_API_KEY")
 MEXC_SECRET_KEY = os.getenv("MEXC_SECRET_KEY")
@@ -42,30 +43,23 @@ def get_fondo1_total():
         headers = { 'X-MEXC-APIKEY': MEXC_API_KEY }
         url = f'{BASE_URL}{path}?{query_string}&signature={signature}'
         response = requests.get(url, headers=headers)
-
         if response.status_code == 200:
             data = response.json()
             total = 0.0
             for balance in data['balances']:
                 amount = float(balance['free']) + float(balance['locked'])
                 if amount > 0:
-                    asset = balance['asset']
-                    if asset == 'USDT':
-                        total += amount  # No necesita conversión
-                    else:
-                        symbol = asset + 'USDT'
-                        try:
-                            price_url = f"https://api.mexc.com/api/v3/ticker/price?symbol={symbol}"
-                            price_response = requests.get(price_url)
-                            price_data = price_response.json()
-                            price = float(price_data['price'])
-                            total += amount * price
-                        except:
-                            continue
+                    symbol = balance['asset'] + 'USDT'
+                    try:
+                        price_url = f"https://api.mexc.com/api/v3/ticker/price?symbol={symbol}"
+                        price_response = requests.get(price_url)
+                        price = float(price_response.json()['price'])
+                        total += amount * price
+                    except:
+                        continue
             _cached_fondo1_total = total
             _last_update_time = now
     return _cached_fondo1_total
-
 
 # ------------------- Fondo 2: Pestillo Capital -------------------
 FONDO2_TOTAL = 80000.0
@@ -110,7 +104,6 @@ for nombre, btc in aportes_f2.items():
 # ------------------- Comandos de tablas -------------------
 @bot.message_handler(commands=['tabla1'])
 def enviar_tabla1(message):
-    print("📊 Comando /tabla1 recibido")
     fondo1_total = get_fondo1_total()
     tabla = "📋 Fondo de Recuperación\n\n"
     tabla += f"{'Código':<8} {'Nombre':<10} {'%':>7} {'Monto USD':>12}\n"
@@ -120,7 +113,8 @@ def enviar_tabla1(message):
         tabla += f"{inv['codigo']:<8} {inv['nombre']:<10} {inv['porcentaje']:>7.2f}%  ${monto:>11,.2f}\n"
     tabla += "-" * 40 + "\n"
     tabla += f"{'Total':<20} {100.00:>7.2f}%  ${fondo1_total:>11,.2f}\n"
-    bot.send_message(message.chat.id, f"```\n{tabla}```", parse_mode='Markdown')
+    bot.send_message(message.chat.id, f"```
+{tabla}```", parse_mode='Markdown')
 
 @bot.message_handler(commands=['tabla2'])
 def enviar_tabla2(message):
@@ -131,47 +125,40 @@ def enviar_tabla2(message):
         tabla += f"{inv['nombre']:<10} {inv['participacion']:>7.2f}%   ${inv['div_normal']:>12,.2f}   ${inv['div_kush']:>11,.2f}   ${inv['total']:>10,.2f}\n"
     tabla += "-" * 60 + "\n"
     tabla += f"{'TOTAL':<10} {100.00:>7.2f}%   ${DIVIDENDO_70:>12,.2f}   ${DIVIDENDO_30:>11,.2f}   ${FONDO2_TOTAL:>10,.2f}"
-    bot.send_message(message.chat.id, f"```\n{tabla}```", parse_mode='Markdown')
+    bot.send_message(message.chat.id, f"```
+{tabla}```", parse_mode='Markdown')
 
-@bot.message_handler(func=lambda message: True)
-def responder(message):
-    nombre_input = message.text.strip().lower()
-    print(f"🔍 Buscando por nombre: {nombre_input}")
-    total_general = 0.0
-    respuesta = ""
-
-    inv1 = next((inv for inv in inversores_f1 if inv['nombre'].lower() == nombre_input), None)
-    if inv1:
-        print(f"✅ Encontrado en Fondo 1: {inv1['nombre']}")
-        fondo1_total = get_fondo1_total()
-        porcentaje1 = inv1["porcentaje"]
-        monto1 = round((porcentaje1 / 100) * fondo1_total, 2)
-        total_general += monto1
-        respuesta += (
-            f"📌 Fondo de Recuperación\n"
-            f"👤 Nombre: {inv1['nombre']}\n"
-            f"📊 Participación: {porcentaje1:.2f}%\n"
-            f"💰 Monto: ${monto1:,.2f} USD\n\n"
-        )
-
-    inv2 = next((inv for inv in inversores_f2 if inv['nombre'].lower() == nombre_input), None)
-    if inv2:
-        print(f"✅ Encontrado en Fondo 2: {inv2['nombre']}")
-        total_general += inv2["total"]
-        respuesta += (
-            f"📌 Pestillo Capital\n"
-            f"👤 Nombre: {inv2['nombre']}\n"
-            f"📊 Participación: {inv2['participacion']:.2f}%\n"
-            f"💵 Dividendo: ${inv2['div_normal']:,.2f}\n"
-            f"🍃 Dividendo KUSH: ${inv2['div_kush']:,.2f}\n"
-            f"💰 Total Fondo 2: ${inv2['total']:,.2f} USD\n\n"
-        )
-
-    if respuesta:
-        respuesta += f"📦 Total combinado: ${total_general:,.2f} USD"
-        bot.reply_to(message, respuesta.strip(), parse_mode='Markdown')
-    else:
-        bot.reply_to(message, "❌ No se encontró ningún inversor con ese nombre. Asegúrate de escribirlo bien.")
+# ------------------- Comando de últimas órdenes -------------------
+@bot.message_handler(commands=['ordenes'])
+def ultimas_ordenes(message):
+    symbols = ['WIFUSDT', 'SOLUSDT', 'LDOUSDT']  # Agrega más si quieres
+    timestamp = int(time.time() * 1000)
+    query_string = f'timestamp={timestamp}'
+    signature = hmac.new(MEXC_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
+    headers = {'X-MEXC-APIKEY': MEXC_API_KEY}
+    
+    respuesta = "🧾 Últimas órdenes del fondo:\n\n"
+    for symbol in symbols:
+        try:
+            url = f"{BASE_URL}/api/v3/allOrders?symbol={symbol}&{query_string}&signature={signature}"
+            res = requests.get(url, headers=headers)
+            if res.status_code == 200:
+                data = res.json()[-3:]
+                if not data:
+                    respuesta += f"📈 {symbol}: No hay órdenes.\n\n"
+                    continue
+                respuesta += f"📈 {symbol}:\n"
+                for orden in data:
+                    tipo = "🟢 COMPRA" if orden['side'] == 'BUY' else "🔴 VENTA"
+                    estado = orden['status']
+                    precio = orden['price']
+                    cantidad = orden['origQty']
+                    fecha = datetime.fromtimestamp(int(orden['time'])/1000).strftime('%Y-%m-%d %H:%M')
+                    respuesta += f"{tipo} | {cantidad} @ {precio} | {estado} | {fecha}\n"
+                respuesta += "\n"
+        except Exception as e:
+            respuesta += f"⚠️ Error al obtener {symbol}: {e}\n\n"
+    bot.send_message(message.chat.id, respuesta.strip())
 
 # ------------------- Servidor Flask -------------------
 app = Flask('')
