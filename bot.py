@@ -113,8 +113,7 @@ def enviar_tabla1(message):
         tabla += f"{inv['codigo']:<8} {inv['nombre']:<10} {inv['porcentaje']:>7.2f}%  ${monto:>11,.2f}\n"
     tabla += "-" * 40 + "\n"
     tabla += f"{'Total':<20} {100.00:>7.2f}%  ${fondo1_total:>11,.2f}\n"
-    bot.send_message(message.chat.id, f"```
-{tabla}```", parse_mode='Markdown')
+    bot.send_message(message.chat.id, f"```\n{tabla}```", parse_mode='Markdown')
 
 @bot.message_handler(commands=['tabla2'])
 def enviar_tabla2(message):
