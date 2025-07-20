@@ -124,8 +124,7 @@ def enviar_tabla2(message):
         tabla += f"{inv['nombre']:<10} {inv['participacion']:>7.2f}%   ${inv['div_normal']:>12,.2f}   ${inv['div_kush']:>11,.2f}   ${inv['total']:>10,.2f}\n"
     tabla += "-" * 60 + "\n"
     tabla += f"{'TOTAL':<10} {100.00:>7.2f}%   ${DIVIDENDO_70:>12,.2f}   ${DIVIDENDO_30:>11,.2f}   ${FONDO2_TOTAL:>10,.2f}"
-    bot.send_message(message.chat.id, f"```
-{tabla}```", parse_mode='Markdown')
+    bot.send_message(message.chat.id, f"```{tabla}```", parse_mode='Markdown')
 
 # ------------------- Comando de últimas órdenes -------------------
 @bot.message_handler(commands=['ordenes'])
