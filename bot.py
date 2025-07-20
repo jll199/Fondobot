@@ -135,7 +135,7 @@ def enviar_tabla2(message):
 # ------------------- Comando de últimas órdenes -------------------
 @bot.message_handler(commands=['ordenes'])
 def ultimas_ordenes(message):
-    symbols = ['WIFUSDT', 'SOLUSDT', 'LDOUSDT']  # Agrega más si quieres
+    symbols = ['WIFUSDT', 'SOLUSDT', 'LDOUSDT','JTOUSDT','ETHUSDT','BTCUSDT']  # Agrega más si quieres
     timestamp = int(time.time() * 1000)
     query_string = f'timestamp={timestamp}'
     signature = hmac.new(MEXC_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
@@ -163,6 +163,64 @@ def ultimas_ordenes(message):
         except Exception as e:
             respuesta += f"⚠️ Error al obtener {symbol}: {e}\n\n"
     bot.send_message(message.chat.id, respuesta.strip())
+
+    # ------------------- Consulta individual -------------------
+
+@bot.message_handler(func=lambda message: True)
+def responder(message):
+    nombre_input = message.text.strip().lower()
+    total_general = 0.0
+    respuesta = ""
+
+    inv1 = next((inv for inv in inversores_f1 if inv['nombre'].lower() == nombre_input), None)
+    if inv1:
+        porcentaje1 = inv1["porcentaje"]
+        monto1 = round((porcentaje1 / 100) * FONDO1_TOTAL, 2)
+        total_general += monto1
+        respuesta += (
+            f"📌 Fondo de Recuperación\n"
+            f"👤 Nombre: {inv1['nombre']}\n"
+            f"📊 Participación: {porcentaje1:.2f}%\n"
+            f"💰 Monto: ${monto1:,.2f} USD\n\n"
+        )
+
+    inv2 = next((inv for inv in inversores_f2 if inv['nombre'].lower() == nombre_input), None)
+    if inv2:
+        total_general += inv2["total"]
+        respuesta += (
+            f"📌 Pestillo Capital\n"
+            f"👤 Nombre: {inv2['nombre']}\n"
+            f"📊 Participación: {inv2['participacion']:.2f}%\n"
+            f"💵 Dividendo: ${inv2['div_normal']:,.2f}\n"
+            f"🍃 Dividendo KUSH: ${inv2['div_kush']:,.2f}\n"
+            f"💰 Total Fondo 2: ${inv2['total']:,.2f} USD\n\n"
+        )
+
+    if respuesta:
+        respuesta += f"📦 Total combinado: ${total_general:,.2f} USD"
+        bot.reply_to(message, respuesta.strip(), parse_mode='Markdown')
+    else:
+        mensaje_bienvenida = """👋 ¡Bienvenido al canal de participación de fondos!
+
+Estimado inversor,  
+Gracias por formar parte de este espacio privado donde podrás consultar tu participación actualizada en dos fondos de inversión gestionados de forma independiente:
+
+1. Fondo de Recuperación  
+2. Pestillo Capital
+
+📊 Aquí podrás consultar:
+- Tu participación total (sumando ambos fondos).
+- La distribución exacta de tus participaciones en cada fondo.
+
+🔎 Escribe en el chat:
+- ✅ Tu nombre completo para ver tu participación total.
+- 📄 /tabla1 para ver la tabla del Fondo de Recuperación.
+- 📄 /tabla2 para ver la tabla del Fondo Pestillo Capital.
+
+Cualquier duda, no dudes en ponerte en contacto con la administración.  
+¡Gracias por tu confianza y participación!"""
+        bot.reply_to(message, mensaje_bienvenida, parse_mode='Markdown')
+
 
 # ------------------- Servidor Flask -------------------
 app = Flask('')
