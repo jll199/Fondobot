@@ -9,7 +9,7 @@ import telebot
 
 
 # ------------------- Cargar variables de entorno -------------------
-load_dotenv()
+
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 MEXC_API_KEY = os.getenv("MEXC_API_KEY")
 MEXC_SECRET_KEY = os.getenv("MEXC_SECRET_KEY")
