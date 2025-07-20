@@ -1,16 +1,23 @@
 import os
 import time
 import requests
+import hmac
+import hashlib
 from flask import Flask, request
 from threading import Thread
 import telebot
+from dotenv import load_dotenv
 
-# ------------------- Configuración -------------------
+# ------------------- Cargar variables de entorno -------------------
+load_dotenv()
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+MEXC_API_KEY = os.getenv("MEXC_API_KEY")
+MEXC_SECRET_KEY = os.getenv("MEXC_SECRET_KEY")
+BASE_URL = 'https://api.mexc.com'
+
 bot = telebot.TeleBot(TOKEN)
 
-# ------------------- Fondo 1: Fondo de Recuperación -------------------
-CANTIDAD_WIF = 14864.62  # Cantidad exacta de WIF en posesión del fondo
+# ------------------- Fondo 1: Fondo de Recuperación (MEXC API) -------------------
 CACHE_TIMEOUT = 60  # segundos
 _last_update_time = 0
 _cached_fondo1_total = 0.0
@@ -24,25 +31,32 @@ inversores_f1 = [
     {"codigo": "567890", "nombre": "James",  "porcentaje": 5.19},
 ]
 
-def obtener_precio_wif():
-    url = "https://api.coingecko.com/api/v3/simple/price?ids=dogwifcoin&vs_currencies=usd"
-    try:
-        response = requests.get(url)
-        data = response.json()
-        print("🔎 Respuesta CoinGecko:", data)
-        precio = data['dogwifcoin']['usd']
-        return float(precio)
-    except Exception as e:
-        print("❌ Error al obtener precio WIF:", e)
-        return None
-
 def get_fondo1_total():
     global _last_update_time, _cached_fondo1_total
     now = time.time()
     if now - _last_update_time > CACHE_TIMEOUT:
-        precio_actual = obtener_precio_wif()
-        if precio_actual is not None:
-            _cached_fondo1_total = CANTIDAD_WIF * precio_actual
+        path = '/api/v3/account'
+        timestamp = int(now * 1000)
+        query_string = f'timestamp={timestamp}'
+        signature = hmac.new(MEXC_SECRET_KEY.encode(), query_string.encode(), hashlib.sha256).hexdigest()
+        headers = { 'X-MEXC-APIKEY': MEXC_API_KEY }
+        url = f'{BASE_URL}{path}?{query_string}&signature={signature}'
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            total = 0.0
+            for balance in data['balances']:
+                amount = float(balance['free']) + float(balance['locked'])
+                if amount > 0:
+                    symbol = balance['asset'] + 'USDT'
+                    try:
+                        price_url = f"https://api.mexc.com/api/v3/ticker/price?symbol={symbol}"
+                        price_response = requests.get(price_url)
+                        price = float(price_response.json()['price'])
+                        total += amount * price
+                    except:
+                        continue
+            _cached_fondo1_total = total
             _last_update_time = now
     return _cached_fondo1_total
 
@@ -87,7 +101,6 @@ for nombre, btc in aportes_f2.items():
     })
 
 # ------------------- Comandos de tablas -------------------
-
 @bot.message_handler(commands=['tabla1'])
 def enviar_tabla1(message):
     fondo1_total = get_fondo1_total()
@@ -112,79 +125,7 @@ def enviar_tabla2(message):
     tabla += f"{'TOTAL':<10} {100.00:>7.2f}%   ${DIVIDENDO_70:>12,.2f}   ${DIVIDENDO_30:>11,.2f}   ${FONDO2_TOTAL:>10,.2f}"
     bot.send_message(message.chat.id, f"```\n{tabla}```", parse_mode='Markdown')
 
-# ------------------- Consulta individual -------------------
-
-usuarios_respondidos = set()
-
-@bot.message_handler(func=lambda message: True)
-def responder(message):
-    nombre_input = message.text.strip().lower()
-    total_general = 0.0
-    respuesta = ""
-
-    inv1 = next((inv for inv in inversores_f1 if inv['nombre'].lower() == nombre_input), None)
-    if inv1:
-        fondo1_total = get_fondo1_total()
-        porcentaje1 = inv1["porcentaje"]
-        monto1 = round((porcentaje1 / 100) * fondo1_total, 2)
-        total_general += monto1
-        respuesta += (
-            f"📌 Fondo de Recuperación\n"
-            f"👤 Nombre: {inv1['nombre']}\n"
-            f"📊 Participación: {porcentaje1:.2f}%\n"
-            f"💰 Monto: ${monto1:,.2f} USD\n\n"
-        )
-
-    inv2 = next((inv for inv in inversores_f2 if inv['nombre'].lower() == nombre_input), None)
-    if inv2:
-        total_general += inv2["total"]
-        respuesta += (
-            f"📌 Pestillo Capital\n"
-            f"👤 Nombre: {inv2['nombre']}\n"
-            f"📊 Participación: {inv2['participacion']:.2f}%\n"
-            f"💵 Dividendo: ${inv2['div_normal']:,.2f}\n"
-            f"🍃 Dividendo KUSH: ${inv2['div_kush']:,.2f}\n"
-            f"💰 Total Fondo 2: ${inv2['total']:,.2f} USD\n\n"
-        )
-
-    if respuesta:
-        respuesta += f"📦 Total combinado: ${total_general:,.2f} USD"
-        bot.reply_to(message, respuesta.strip(), parse_mode='Markdown')
-    else:
-        chat_id = message.chat.id
-        if chat_id not in usuarios_respondidos:
-            usuarios_respondidos.add(chat_id)
-            mensaje_bienvenida = """👋 *¡Bienvenido al canal de participación de fondos!*
-
-Estimado inversor,  
-Gracias por formar parte de este espacio privado donde podrás consultar tu participación actualizada en *dos fondos de inversión* gestionados de forma independiente:
-
-1. *Fondo de Recuperación*  
-2. *Pestillo Capital*
-
-📊 Aquí podrás consultar:
-- Tu *participación total* (sumando ambos fondos).
-- La *distribución exacta* de tus participaciones en cada fondo.
-
-🔎 Escribe en el chat:
-- ✅ Tu *nombre completo* para ver tu participación total.
-- 📄 `/tabla1` para ver la tabla del *Fondo de Recuperación*.
-- 📄 `/tabla2` para ver la tabla del *Fondo Pestillo Capital*.
-
-Cualquier duda, no dudes en ponerte en contacto con la administración.  
-¡Gracias por tu confianza y participación!"""
-            bot.reply_to(message, mensaje_bienvenida, parse_mode='Markdown')
-        else:
-            instrucciones = """ℹ️ *Instrucciones para consultar tu participación:*
-
-- Escribe tu *nombre exacto* tal como fue registrado.
-- O usa los comandos disponibles:
-  • `/tabla1` – Fondo de Recuperación  
-  • `/tabla2` – Fondo Pestillo Capital"""
-            bot.reply_to(message, instrucciones, parse_mode='Markdown')
-
 # ------------------- Servidor Flask -------------------
-
 app = Flask('')
 
 @app.route('/')
@@ -198,12 +139,5 @@ def webhook():
     bot.process_new_updates([update])
     return '', 200
 
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
 if __name__ == "__main__":
-    run()
-
-
-
-
+    app.run(host='0.0.0.0', port=8080)
