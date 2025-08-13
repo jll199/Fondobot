@@ -68,9 +68,9 @@ def get_fondo1_total():
     return _cached_fondo1_total
 
 # ------------------- Fondo 2: Pestillo Capital -------------------
-FONDO2_TOTAL = 80000.0
-DIVIDENDO_70 = 56000.0
-DIVIDENDO_30 = 24000.0
+FONDO2_TOTAL = 92519.0
+DIVIDENDO_70 = 64763.3
+DIVIDENDO_30 = 27755.7
 
 aportes_f2 = {
     "Javi": 0.033185225,
