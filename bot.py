@@ -24,13 +24,14 @@ _last_update_time = 0
 _cached_fondo1_total = 0.0
 
 inversores_f1 = [
-    {"codigo": "123456", "nombre": "Varela", "porcentaje": 30.47},
-    {"codigo": "654321", "nombre": "Ander",  "porcentaje": 45.30},
-    {"codigo": "789012", "nombre": "Churri", "porcentaje": 13.02},
-    {"codigo": "345678", "nombre": "Bruno",  "porcentaje": 2.17},
-    {"codigo": "901234", "nombre": "Oli",    "porcentaje": 3.83},
-    {"codigo": "567890", "nombre": "James",  "porcentaje": 5.19},
+    {"codigo": "123456", "nombre": "Varela", "porcentaje": 30.16},
+    {"codigo": "654321", "nombre": "Ander",  "porcentaje": 44.82},
+    {"codigo": "789012", "nombre": "Churri", "porcentaje": 12.89},
+    {"codigo": "345678", "nombre": "Bruno",  "porcentaje": 2.15},
+    {"codigo": "901234", "nombre": "Oli",    "porcentaje": 4.80},
+    {"codigo": "567890", "nombre": "James",  "porcentaje": 5.14},
 ]
+
 
 def get_fondo1_total():
     global _last_update_time, _cached_fondo1_total
