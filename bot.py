@@ -108,6 +108,26 @@ for nombre, btc in aportes_f2.items():
         "total": round(total_div, 2)
     })
 
+# ===== AJUSTE: ANDER toma 1.162,54 USD del dividendo (70%) de Rafa =====
+ANDER_IMPORTE = 1162.54
+
+for inv in inversores_f2:
+    if inv["nombre"].lower() == "rafa":
+        nuevo_div = max(inv["div_normal"] - ANDER_IMPORTE, 0.0)
+        inv["div_normal"] = round(nuevo_div, 2)
+        inv["participacion"] = (inv["div_normal"] / DIVIDENDO_70) * 100
+        inv["total"] = round(inv["div_normal"] + inv["div_kush"], 2)
+        break
+
+inversores_f2.append({
+    "nombre": "Ander",
+    "participacion": (ANDER_IMPORTE / DIVIDENDO_70) * 100,
+    "div_normal": round(ANDER_IMPORTE, 2),
+    "div_kush": 0.0,
+    "total": round(ANDER_IMPORTE, 2)
+})
+# ===== FIN AJUSTE =====
+
 # ------------------- Comandos de tablas -------------------
 @bot.message_handler(commands=['tabla1'])
 def enviar_tabla1(message):
